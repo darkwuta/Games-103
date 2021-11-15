@@ -1,5 +1,7 @@
 因为好多都是布料的所所以只会选读QAQ
 
+2021/11/15 学校课太多了QAQ，估计只能读一点点QAQ
+
 - [ ] [Witkin and Baraff.2001.Physically Based Modeling - Rigid Body Dynamics.SIGS GRAPH Courses.](https://graphics.stanford.edu/courses/cs448b-00-winter/papers/phys_model.pdf)
 - [ ] [Muller et al.2005.Meshless Deformations Based on Shape Matching.TOG(SIGS GRAPH)](http://www.beosil.com/download/MeshlessDeformations_SIG05.pdf)
 - [ ] [Baraff and Witkin.1998. Large Step in Cloth Simulation.SIGGRAPH](https://www.ri.cmu.edu/pub_files/pub1/baraff_david_1998_1/baraff_david_1998_1.pdf)
@@ -16,3 +18,6 @@
 - [ ] [Provot.1995.Deformation Constraints in a Mass-Spring Model to Describe Rigid Cloth Behavior. Graphics Interface.](http://citeseerx.ist.psu.edu/viewdoc/download?doi=10.1.1.84.1732&rep=rep1&type=pdf)
 - [ ] [Tournier et al.2015.Stable Constrained Dynamics.TOG(SIGGRAPH).](https://hal.inria.fr/hal-01157835v2/document)
 
+第三节课推荐
+
+- [ ] [Physically Based Modeling](https://graphics.pixar.com/pbm2001/pdf/notesg.pdf)
