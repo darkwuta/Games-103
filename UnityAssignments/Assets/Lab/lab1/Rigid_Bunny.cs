@@ -3,10 +3,10 @@ using System.Collections;
 
 public class Rigid_Bunny : MonoBehaviour 
 {
-	bool launched 		= false;
-	float dt 			= 0.015f;
-	Vector3 v 			= new Vector3(0, 0, 0);	// velocity
-	Vector3 w 			= new Vector3(0, 0, 0);	// angular velocity
+	public bool launched 		= false;
+	public float dt 			= 0.015f;
+	public Vector3 v 			= new Vector3(0, 0, 0);	// velocity
+	public Vector3 w 			= new Vector3(0, 0, 0);	// angular velocity
 	
 	float mass;									// mass
 	Matrix4x4 I_ref;							// reference inertia
@@ -83,21 +83,40 @@ public class Rigid_Bunny : MonoBehaviour
 			launched=true;
 		}
 
-		// Part I: Update velocities
+		
+		if (launched)
+		{
+			// Part I: Update velocities
+			// LeapForg
+			Vector3 g = new Vector3(0.0f, -9.8f, 0.0f);
+			Vector3 beforeV = v - g * dt / 2;//v-0.5 = v0 - dt/2 * f0
+			v = beforeV + g * dt;//v0.5 = v-0.5 + dt * f0
+			v *= linear_decay;
 
+			// Angular Velocity
+			w = new Vector3(0.1f, 0.2f, 0.0f);
+			w *= angular_decay;
 
-		// Part II: Collision Impulse
-		Collision_Impulse(new Vector3(0, 0.01f, 0), new Vector3(0, 1, 0));
-		Collision_Impulse(new Vector3(2, 0, 0), new Vector3(-1, 0, 0));
+			// Part II: Collision Impulse
+			Collision_Impulse(new Vector3(0, 0.01f, 0), new Vector3(0, 1, 0));
+			Collision_Impulse(new Vector3(2, 0, 0), new Vector3(-1, 0, 0));
 
-		// Part III: Update position & orientation
-		//Update linear status
-		Vector3 x    = transform.position;
-		//Update angular status
-		Quaternion q = transform.rotation;
+			// Part III: Update position & orientation
+			//Update linear status
+			Vector3 x = transform.position;
+			x += v * dt;
+			//Update angular status
+			Quaternion q = transform.rotation;
+			q = QuaternionAdd(q,
+							new Quaternion(dt * 1 / 2 * w.x, dt * 1 / 2 * w.y, dt * 1 / 2 * w.z, 0) * q);
 
-		// Part IV: Assign to the object
-		transform.position = x;
-		transform.rotation = q;
+			// Part IV: Assign to the object
+			transform.position = x;
+			transform.rotation = q;
+		}
+	}
+	Quaternion QuaternionAdd(Quaternion q1, Quaternion q2)
+	{
+		return new Quaternion(q1.x + q2.x, q1.y + q2.y, q1.z + q2.z, q1.w + q2.w);
 	}
 }
