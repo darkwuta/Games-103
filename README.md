@@ -31,3 +31,6 @@ You can find them [here](https://github.com/indevn/GAMES103)@indevn or my Refere
 
 [CS417: Physics based animation](https://github.com/dilevin/CSC417-physics-based-animation)
 
+$$
+a = \frac{f_{ext}}{m} + g\tag{1}
+$$
