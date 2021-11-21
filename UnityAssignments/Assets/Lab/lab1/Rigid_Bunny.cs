@@ -89,13 +89,10 @@ public class Rigid_Bunny : MonoBehaviour
 			// Part I: Update velocities
 			// LeapForg
 			Vector3 g = new Vector3(0.0f, -9.8f, 0.0f);
-			Vector3 beforeV = v - g * dt / 2;//v-0.5 = v0 - dt/2 * f0
-			v = beforeV + g * dt;//v0.5 = v-0.5 + dt * f0
-			v *= linear_decay;
-
+			v = v + g * dt/2;
 			// Angular Velocity
 			w = new Vector3(0.1f, 0.2f, 0.0f);
-			w *= angular_decay;
+			
 
 			// Part II: Collision Impulse
 			Collision_Impulse(new Vector3(0, 0.01f, 0), new Vector3(0, 1, 0));
@@ -105,6 +102,7 @@ public class Rigid_Bunny : MonoBehaviour
 			//Update linear status
 			Vector3 x = transform.position;
 			x += v * dt;
+			v = v + g * dt / 2;
 			//Update angular status
 			Quaternion q = transform.rotation;
 			q = QuaternionAdd(q,
@@ -113,6 +111,8 @@ public class Rigid_Bunny : MonoBehaviour
 			// Part IV: Assign to the object
 			transform.position = x;
 			transform.rotation = q;
+			w *= angular_decay;
+			v *= linear_decay;
 		}
 	}
 	Quaternion QuaternionAdd(Quaternion q1, Quaternion q2)

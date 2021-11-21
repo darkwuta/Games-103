@@ -110,11 +110,12 @@ public class RigidBodyDynamics : MonoBehaviour
     {
         if(IntegrationMethod == Integration.LeapFrog)
         {
-            Vector3 LastVelocity = velocity - force / mass * Time.fixedDeltaTime / 2;//v-0.5 = v0 - dt/2 * f0
-            velocity = LastVelocity + force / mass * Time.fixedDeltaTime;//v0.5 = v-0.5 + dt * f0
+            velocity = velocity + force / mass * Time.fixedDeltaTime / 2;//v0.5 = v0 + dt/2 * f
 
             Vector3 position = transform.position + velocity * Time.fixedDeltaTime;//x1 = x0 + dt * v0.5
             transform.position = position;
+
+            velocity = velocity + force / mass * Time.fixedDeltaTime / 2;//v1 = v0.5 + dt/2 * f
         }
         else if(IntegrationMethod == Integration.SemiImplicit)
         {
@@ -130,7 +131,7 @@ public class RigidBodyDynamics : MonoBehaviour
                             new Quaternion(Time.fixedDeltaTime * 1 / 2 * omega.x, Time.fixedDeltaTime * 1 / 2 * omega.y, Time.fixedDeltaTime * 1 / 2 * omega.z, 0) * transform.rotation);
         transform.rotation = q;
         //Drag
-        velocity *= 0.999f;
+        velocity *= 0.95f;
         omega *= 0.98f;
         //¡¶πÈ¡„
         force = new Vector3(0, 0, 0);
