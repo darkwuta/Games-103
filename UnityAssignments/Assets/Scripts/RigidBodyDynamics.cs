@@ -9,6 +9,7 @@ public class RigidBodyDynamics : MonoBehaviour
 
     public enum Integration {SemiImplicit, LeapFrog}
     public Integration IntegrationMethod = Integration.SemiImplicit;
+    public bool Launch = true;
 
     [Header("Physic Properties")]
     public float mass = 1.0f;                   // 8 verticies
@@ -57,6 +58,11 @@ public class RigidBodyDynamics : MonoBehaviour
     {
         if (this.GetComponent<Rigidbody>())
         {
+            if(Launch)
+            {
+                Launch = false;
+                rigidbody.AddForce(new Vector3(0, 20, 50) * MagOfForce);
+            }
             // 上下左右
             if (Input.GetKey(KeyCode.LeftArrow))
                 rigidbody.AddForce(new Vector3(-1, 0, 0) * MagOfForce);
@@ -80,6 +86,11 @@ public class RigidBodyDynamics : MonoBehaviour
             
         else
         {
+            if (Launch)
+            {
+                Launch = false;
+                AddForce(new Vector3(0, 0, 5) * MagOfForce);
+            }
             // 上下左右
             if (Input.GetKey(KeyCode.LeftArrow))
                 AddForce(new Vector3(-1, 0, 0) * MagOfForce);
@@ -116,6 +127,13 @@ public class RigidBodyDynamics : MonoBehaviour
             transform.position = position;
 
             velocity = velocity + force / mass * Time.fixedDeltaTime / 2;//v1 = v0.5 + dt/2 * f
+
+            // Rotation
+            omega += Time.fixedDeltaTime / 2 * I_ref.inverse.MultiplyVector(torque);
+            Quaternion q = QuaternionAdd(transform.rotation,
+                                new Quaternion(Time.fixedDeltaTime * 1 / 2 * omega.x, Time.fixedDeltaTime * 1 / 2 * omega.y, Time.fixedDeltaTime * 1 / 2 * omega.z, 0) * transform.rotation);
+            transform.rotation = q;
+            omega += Time.fixedDeltaTime / 2 * I_ref.inverse.MultiplyVector(torque);
         }
         else if(IntegrationMethod == Integration.SemiImplicit)
         {
@@ -123,16 +141,18 @@ public class RigidBodyDynamics : MonoBehaviour
 
             Vector3 position = transform.position + velocity * Time.fixedDeltaTime;//x1 = x0 + dt * v1
             transform.position = position;
+
+            // Rotation
+            omega += Time.fixedDeltaTime * I_ref.inverse.MultiplyVector(torque);
+            Quaternion q = QuaternionAdd(transform.rotation,
+                                new Quaternion(Time.fixedDeltaTime * 1 / 2 * omega.x, Time.fixedDeltaTime * 1 / 2 * omega.y, Time.fixedDeltaTime * 1 / 2 * omega.z, 0) * transform.rotation);
+            transform.rotation = q;
         }
 
-        // Rotation
-        omega += Time.fixedDeltaTime * I_ref.inverse.MultiplyVector(torque);
-        Quaternion q = QuaternionAdd(transform.rotation, 
-                            new Quaternion(Time.fixedDeltaTime * 1 / 2 * omega.x, Time.fixedDeltaTime * 1 / 2 * omega.y, Time.fixedDeltaTime * 1 / 2 * omega.z, 0) * transform.rotation);
-        transform.rotation = q;
+        
         //Drag
-        velocity *= 0.95f;
-        omega *= 0.98f;
+        velocity *= 0.96f;
+        omega *= 0.99f;
         //力归零
         force = new Vector3(0, 0, 0);
         torque = new Vector3(0, 0, 0);
