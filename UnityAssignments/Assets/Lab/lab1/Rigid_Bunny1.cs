@@ -1,7 +1,7 @@
 ﻿using UnityEngine;
 using System.Collections;
 
-public class Rigid_Bunny : MonoBehaviour 
+public class Rigid_Bunny1 : MonoBehaviour 
 {
 	public bool launched 		= false;
 	public float dt 			= 0.015f;
@@ -10,13 +10,12 @@ public class Rigid_Bunny : MonoBehaviour
 	public bool isGravity		= false;
 	private Vector3 gravity		= new Vector3(0.0f, 0.0f, 0.0f);
 
-	float mass;                                 // mass
-	float mass_inv;
+	float mass;									// mass
 	Matrix4x4 I_ref;							// reference inertia
 
 	float linear_decay	= 0.999f;				// for velocity decay
 	float angular_decay	= 0.98f;				
-	float restitution 	= 0.3f;					// for collision
+	float restitution 	= 0.5f;					// for collision
 
 
 	// Use this for initialization
@@ -45,7 +44,6 @@ public class Rigid_Bunny : MonoBehaviour
 			I_ref[2, 2]-=m*vertices[i][2]*vertices[i][2];
 		}
 		I_ref [3, 3] = 1;
-		mass_inv = 1/mass;
 	}
 	
 	Matrix4x4 Get_Cross_Matrix(Vector3 a)
@@ -72,9 +70,7 @@ public class Rigid_Bunny : MonoBehaviour
 		// P 是平面的位置，N是平面的法相
 		// Collision Detection
 		Vector3 x = transform.position;
-		Matrix4x4 R = Matrix4x4.Rotate(transform.rotation);
-		//R[3, 3] = 0;
-		Matrix4x4 I = R * I_ref * R.transpose;
+
 		// 遍历顶点
 		Mesh mesh = GetComponent<MeshFilter>().mesh;
 		Vector3[] vertices = mesh.vertices;
@@ -84,9 +80,9 @@ public class Rigid_Bunny : MonoBehaviour
         {
 			if (PlaneSignedDistanceFunction(vertices[i] + x, P, N) < 0)// sdf < 0说明发生了碰撞
             {
-				
 				avg_x += vertices[i];
 				collision_num++;
+
 			}
         }
 		if (collision_num == 0)
@@ -96,7 +92,7 @@ public class Rigid_Bunny : MonoBehaviour
 		Debug.Log(avg_x);
 
 		//  计算新的速度
-		
+		Matrix4x4 R = Matrix4x4.Rotate(transform.rotation);
 		
 		Vector3 ri = avg_x;// 这里很重要，要用局部坐标
 		Vector3 vi = v + Vector3.Cross(w, R * ri);
@@ -113,23 +109,18 @@ public class Rigid_Bunny : MonoBehaviour
 			v_new_i = v_Ni + v_Ti;
 
 			// 计算矩阵K
-			Matrix4x4 crossRri = Get_Cross_Matrix(R * ri);
-			Matrix4x4 Identity = Matrix4x4.identity;
-			Identity[0, 0] = mass_inv;
-			Identity[1, 1] = mass_inv;
-			Identity[2, 2] = mass_inv;
-			Identity[3, 3] = mass_inv;
-			Matrix4x4 K = MatrixSubtraction(Identity, crossRri * I.inverse * crossRri);
-			
+			Matrix4x4 I = R * I_ref * R.transpose;
+			Matrix4x4 K = MatrixSubtraction(MatrixMultiplication(1 / mass, Matrix4x4.identity), Get_Cross_Matrix(R * ri) * I.inverse * Get_Cross_Matrix(R * ri));
 			// 计算j
+			
 			Vector3 J = K.inverse * (v_new_i - vi);
 
 			
-			v += J * mass_inv;
+			v = v + J / mass;
 			Vector3 ta = I.inverse * Vector3.Cross(R * ri, J);
 			Debug.Log(Vector3.Cross(R * ri, J));
 			Debug.Log(I.inverse);
-			w += ta;
+			w = w + ta;
 			Debug.Log(w);
 		}
 		
@@ -148,8 +139,8 @@ public class Rigid_Bunny : MonoBehaviour
 		}
 		if(Input.GetKey("l"))
 		{
-			v = new Vector3 (4, 0, 0);
-			w = new Vector3(1f, 0f, 0f);
+			v = new Vector3 (3, 2, 0);
+			w = new Vector3(0f, 0f, 0f);
 			launched =true;
 		}
 
@@ -168,11 +159,6 @@ public class Rigid_Bunny : MonoBehaviour
 			Collision_Impulse(new Vector3(0, 0.01f, 0), new Vector3(0, 1, 0));
 			Collision_Impulse(new Vector3(2, 0, 0), new Vector3(-1, 0, 0));
 
-			if (v.magnitude <= 0.1)
-				v = new Vector3();
-			if (w.magnitude <= 0.1)
-				w = new Vector3();
-
 			// Part III: Update position & orientation
 			//Update linear status
 			Vector3 x = transform.position;
@@ -189,7 +175,6 @@ public class Rigid_Bunny : MonoBehaviour
 			transform.rotation = q;
 			w *= angular_decay;
 			v *= linear_decay;
-			
 		}
 	}
 	Quaternion QuaternionAdd(Quaternion q1, Quaternion q2)
@@ -234,6 +219,7 @@ public class Rigid_Bunny : MonoBehaviour
 		m1[2, 1] -= m2[2, 1];
 		m1[2, 2] -= m2[2, 2];
 
+		m1[3, 3] = 1;
 		return m1;
 	}
 }

@@ -6,7 +6,6 @@ public class RigidBodyDynamics : MonoBehaviour
 {
     public float MagOfForce = 10;
     private Rigidbody rigidbody;
-
     public enum Integration {SemiImplicit, LeapFrog}
     public Integration IntegrationMethod = Integration.SemiImplicit;
     public bool Launch = true;

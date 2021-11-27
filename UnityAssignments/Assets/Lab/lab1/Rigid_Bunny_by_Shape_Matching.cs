@@ -144,7 +144,7 @@ public class Rigid_Bunny_by_Shape_Matching : MonoBehaviour
    	{
    		for(int i=0; i<Q.Length; i++)
 		{
-			Vector3 x=(Vector3)(R*Q[i])+c;
+			Vector3 x=(Vector3)(R*Q[i])+c;// ¶¥µãµÄÎ»ÖÃ
 
 			V[i]+=(x-X[i])*inv_dt;
 			X[i]=x;
@@ -161,10 +161,13 @@ public class Rigid_Bunny_by_Shape_Matching : MonoBehaviour
     void Update()
     {
   		float dt = 0.015f;
-
-  		//Step 1: run a simple particle system.
-        for(int i=0; i<V.Length; i++)
+		Vector3 c = new Vector3();
+		Matrix4x4 A = Matrix4x4.zero;
+		Matrix4x4 R = Matrix4x4.zero;
+		//Step 1: run a simple particle system.
+		for (int i=0; i<V.Length; i++)
         {
+			
         }
 
         //Step 2: Perform simple particle collision.
@@ -172,10 +175,12 @@ public class Rigid_Bunny_by_Shape_Matching : MonoBehaviour
 
 		// Step 3: Use shape matching to get new translation c and 
 		// new rotation R. Update the mesh by c and R.
-        //Shape Matching (translation)
-		
+		//Shape Matching (translation)
+
 		//Shape Matching (rotation)
+		R = Get_Rotation(A);
+
+		Update_Mesh(c, R, 1/dt);
 		
-		//Update_Mesh(c, R, 1/dt);
     }
 }
