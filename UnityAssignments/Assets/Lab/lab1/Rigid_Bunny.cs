@@ -10,13 +10,14 @@ public class Rigid_Bunny : MonoBehaviour
 	public bool isGravity		= false;
 	private Vector3 gravity		= new Vector3(0.0f, 0.0f, 0.0f);
 
+
 	float mass;                                 // mass
 	float mass_inv;
 	Matrix4x4 I_ref;							// reference inertia
 
 	float linear_decay	= 0.999f;				// for velocity decay
 	float angular_decay	= 0.98f;				
-	float restitution 	= 0.3f;					// for collision
+	float restitution 	= 0.5f;					// for collision
 
 
 	// Use this for initialization
@@ -73,38 +74,39 @@ public class Rigid_Bunny : MonoBehaviour
 		// Collision Detection
 		Vector3 x = transform.position;
 		Matrix4x4 R = Matrix4x4.Rotate(transform.rotation);
-		//R[3, 3] = 0;
 		Matrix4x4 I = R * I_ref * R.transpose;
 		// 遍历顶点
 		Mesh mesh = GetComponent<MeshFilter>().mesh;
-		Vector3[] vertices = mesh.vertices;
-		Vector3 avg_x = Vector3.zero;
+		Vector3 avg_r = new Vector3();
 		int collision_num = 0;
+		Vector3[] vertices = mesh.vertices;
 		for (int i = 0; i < vertices.Length; i++)
         {
-			if (PlaneSignedDistanceFunction(vertices[i] + x, P, N) < 0)// sdf < 0说明发生了碰撞
+			Vector3 Rr_i = R * vertices[i];
+			float sdf = PlaneSignedDistanceFunction(x + Rr_i, P, N);
+			if (sdf<0)// sdf < 0说明发生了碰撞
             {
+
+				Vector3 r_i = vertices[i];
 				
-				avg_x += vertices[i];
+				avg_r += r_i;
 				collision_num++;
 			}
         }
 		if (collision_num == 0)
 			return;
 
-		avg_x /= collision_num;
-		Debug.Log(avg_x);
+		avg_r /= collision_num;
+		//Debug.Log(avg_x);
 
 		//  计算新的速度
-		
-		
-		Vector3 ri = avg_x;// 这里很重要，要用局部坐标
+		Vector3 ri = avg_r;
 		Vector3 vi = v + Vector3.Cross(w, R * ri);
-		Vector3 v_Ni = Vector3.Dot(vi, N) * N;
-		Vector3 v_Ti = vi - v_Ni;
-		Vector3 v_new_i = v_Ni + v_Ti;
-		if (Vector3.Dot(vi, N) <= 0)//速度太小时，会无法反弹
+		if (Vector3.Dot(vi, N) < 0)
 		{
+			Vector3 v_Ni = Vector3.Dot(vi, N) * N;
+			Vector3 v_Ti = vi - v_Ni;
+			Vector3 v_new_i = v_Ni + v_Ti;
 			float mu_N = restitution;
 			float mu_T = 0.1f;
 			float a = Mathf.Max(1 - (mu_T * (1 + mu_N) * v_Ni.magnitude / v_Ti.magnitude), 0);
@@ -120,23 +122,27 @@ public class Rigid_Bunny : MonoBehaviour
 			Identity[2, 2] = mass_inv;
 			Identity[3, 3] = mass_inv;
 			Matrix4x4 K = MatrixSubtraction(Identity, crossRri * I.inverse * crossRri);
-			
+
 			// 计算j
 			Vector3 J = K.inverse * (v_new_i - vi);
 
-			
+			// 每一个点都有重力，但是下面的点受力后速度会反弹
 			v += J * mass_inv;
-			Vector3 ta = I.inverse * Vector3.Cross(R * ri, J);
-			Debug.Log(Vector3.Cross(R * ri, J));
-			Debug.Log(I.inverse);
-			w += ta;
+			Vector3 dw = I.inverse * crossRri * J;
+
+			//角速度会发生突变
+			w += dw;
 			Debug.Log(w);
 		}
-		
+
+		//Vector3 ri = avg_x;// 这里很重要，要用局部坐标
+		//Vector3 vi = v + Vector3.Cross(w, R * ri);
+
+
 	}
 
 	// Update is called once per frame
-	void Update () 
+	void FixedUpdate () 
 	{
 		
 		//Game Control
@@ -149,7 +155,7 @@ public class Rigid_Bunny : MonoBehaviour
 		if(Input.GetKey("l"))
 		{
 			v = new Vector3 (4, 0, 0);
-			w = new Vector3(1f, 0f, 0f);
+			w = new Vector3(0f, 0f, 0f);
 			launched =true;
 		}
 
@@ -168,9 +174,9 @@ public class Rigid_Bunny : MonoBehaviour
 			Collision_Impulse(new Vector3(0, 0.01f, 0), new Vector3(0, 1, 0));
 			Collision_Impulse(new Vector3(2, 0, 0), new Vector3(-1, 0, 0));
 
-			if (v.magnitude <= 0.1)
+			if (v.magnitude <= 0.01)
 				v = new Vector3();
-			if (w.magnitude <= 0.1)
+			if (w.magnitude <= 0.01)
 				w = new Vector3();
 
 			// Part III: Update position & orientation
@@ -222,17 +228,25 @@ public class Rigid_Bunny : MonoBehaviour
 
 	Matrix4x4 MatrixSubtraction(Matrix4x4 m1, Matrix4x4 m2)
 	{
-		m1[0, 0] -= m2[0, 0];
-		m1[0, 1] -= m2[0, 1];
-		m1[0, 2] -= m2[0, 2];
+		//m1[0, 0] -= m2[0, 0];
+		//m1[0, 1] -= m2[0, 1];
+		//m1[0, 2] -= m2[0, 2];
 		 		 		
-		m1[1, 0] -= m2[1, 0];
-		m1[1, 1] -= m2[1, 1];
-		m1[1, 2] -= m2[1, 2];
+		//m1[1, 0] -= m2[1, 0];
+		//m1[1, 1] -= m2[1, 1];
+		//m1[1, 2] -= m2[1, 2];
 		 		 		
-		m1[2, 0] -= m2[2, 0];
-		m1[2, 1] -= m2[2, 1];
-		m1[2, 2] -= m2[2, 2];
+		//m1[2, 0] -= m2[2, 0];
+		//m1[2, 1] -= m2[2, 1];
+		//m1[2, 2] -= m2[2, 2];
+
+		for (int x = 0; x < 4; x++) 
+        {
+			for (int y = 0; y < 4; y++) 
+            {
+				m1[x, y] -= m2[x, y];
+			}
+        }
 
 		return m1;
 	}

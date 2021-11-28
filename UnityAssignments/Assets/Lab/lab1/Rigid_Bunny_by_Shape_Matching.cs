@@ -2,18 +2,75 @@ using System.Collections;
 using System.Collections.Generic;
 using UnityEngine;
 
+
+struct rowVector3
+{
+	public float x;
+	public float y;
+	public float z;
+	public rowVector3(float x, float y,float z)
+    {
+		this.x = x;
+		this.y = y;
+		this.z = z;
+    }
+	public rowVector3(Vector3 v)
+    {
+		this.x = v.x;
+		this.y = v.y;
+		this.z = v.z;
+    }
+	public static Matrix4x4 operator *(Vector3 a, rowVector3 b)
+    {
+		Matrix4x4 M = Matrix4x4.zero;
+		M[0, 0] = a.x * b.x;
+		M[0, 1] = a.x * b.y;
+		M[0, 2] = a.x * b.z;
+
+		M[1, 0] = a.y * b.x;
+		M[1, 1] = a.y * b.y;
+		M[1, 2] = a.y * b.z;
+
+		M[2, 0] = a.z * b.x;
+		M[2, 1] = a.z * b.y;
+		M[2, 2] = a.z * b.z;
+
+		M[3, 3] = 1;
+		return M;
+    }
+
+
+}
 public class Rigid_Bunny_by_Shape_Matching : MonoBehaviour
 {
+
+
+	public bool isGravity = false;
+	private Vector3 gravity = new Vector3(0.0f, 0.0f, 0.0f);
 	public bool launched = false;
+
+	public ComputeShader computeShader;
+	public RenderTexture renderTexture;
 	Vector3[] X;
 	Vector3[] Q;
 	Vector3[] V;
 	Matrix4x4 QQt = Matrix4x4.zero;
 
 
-    // Start is called before the first frame update
-    void Start()
+	float linear_decay = 0.999f;                // for velocity decay
+	float angular_decay = 0.98f;
+	float restitution = 0.5f;                   // for collision
+
+	// Start is called before the first frame update
+	void Start()
     {
+		//renderTexture = new RenderTexture(256, 256, 24);
+		//renderTexture.enableRandomWrite = true;
+		//renderTexture.Create();
+
+		//computeShader.SetTexture(0, "Result", renderTexture);
+		//computeShader.Dispatch(0, renderTexture.width / 8, renderTexture.height / 8, 1);
+
     	Mesh mesh = GetComponent<MeshFilter>().mesh;
         V = new Vector3[mesh.vertices.Length];
         X = mesh.vertices;
@@ -153,34 +210,112 @@ public class Rigid_Bunny_by_Shape_Matching : MonoBehaviour
 		mesh.vertices=X;
    	}
 
+	float PlaneSignedDistanceFunction(Vector3 x, Vector3 P, Vector3 N)
+	{
+		return Vector3.Dot((x - P), N);
+	}
+
+	void Collision_Impulse(Vector3 P, Vector3 N)
+	{
+		for (int i = 0; i < V.Length; i++)
+		{
+			float sdf = PlaneSignedDistanceFunction(X[i], P, N);
+			if (sdf < 0)
+            {
+				Vector3 v_Ni = Vector3.Dot(V[i], N) * N;
+				Vector3 v_Ti = V[i] - v_Ni;
+				Vector3 v_new_i = v_Ni + v_Ti;
+				float mu_N = restitution;
+				float mu_T = 0.1f;
+				float a = Mathf.Max(1 - (mu_T * (1 + mu_N) * v_Ni.magnitude / v_Ti.magnitude), 0);
+				v_Ni = -mu_N * v_Ni;
+				v_Ti = a * v_Ti;
+				V[i] = v_Ni + v_Ti;
+				X[i] = X[i] - sdf * N;
+			}
+		}
+	}
 	void Collision(float inv_dt)
 	{
+		Collision_Impulse(new Vector3(0, 0.01f, 0), new Vector3(0, 1, 0));
+		Collision_Impulse(new Vector3(2, 0, 0), new Vector3(-1, 0, 0));
 	}
 
     // Update is called once per frame
     void Update()
     {
-  		float dt = 0.015f;
-		Vector3 c = new Vector3();
-		Matrix4x4 A = Matrix4x4.zero;
-		Matrix4x4 R = Matrix4x4.zero;
-		//Step 1: run a simple particle system.
-		for (int i=0; i<V.Length; i++)
-        {
-			
-        }
 
-        //Step 2: Perform simple particle collision.
-		Collision(1/dt);
+		//Game Control
+		if (Input.GetKey("r"))
+		{
+			transform.position = new Vector3(0, 0.6f, 0);
+			restitution = 0.5f;
+			launched = false;
+		}
+		if (Input.GetKey("l"))
+		{
+			for (int i = 0; i < X.Length; i++)
+				V[i][0] = 4.0f;
+			launched = true;
+		}
 
-		// Step 3: Use shape matching to get new translation c and 
-		// new rotation R. Update the mesh by c and R.
-		//Shape Matching (translation)
 
-		//Shape Matching (rotation)
-		R = Get_Rotation(A);
+		if (launched)
+		{
+			if (isGravity)
+				gravity = new Vector3(0.0f, -9.8f, 0.0f);//没有重力时旋转很正常，但是有了重力头部就会一直朝下
+			else
+				gravity = new Vector3(0.0f, 0.0f, 0.0f);
 
-		Update_Mesh(c, R, 1/dt);
+			float dt = 0.015f;
+			Vector3 c = new Vector3();
+			Matrix4x4 A = Matrix4x4.zero;
+			Matrix4x4 R = Matrix4x4.zero;
+			//Step 1: run a simple particle system.
+			for (int i = 0; i < V.Length; i++)
+			{
+				// simi-integration
+				V[i] += gravity * dt;
+				X[i] += V[i] * dt;
+			}
+			//Step 2: Perform simple particle collision.
+			Collision(1 / dt);
+
+			// Step 3: Use shape matching to get new translation c and 
+			// new rotation R. Update the mesh by c and R.
+			//Shape Matching (translation)
+			for (int i = 0; i < V.Length; i++)
+			{
+				c += X[i];
+			}
+			c /= V.Length;
+
+			Matrix4x4 a_left = Matrix4x4.zero;
+			Matrix4x4 a_right = QQt.inverse;
+			for (int i = 0; i < V.Length; i++)
+			{
+				rowVector3 ri_transpose = new rowVector3(Q[i]);
+				a_left = MatrixAddition(a_left,(X[i] - c) * ri_transpose);
+			}
+			A = a_left * a_right;
+
+			//Shape Matching (rotation)
+			R = Get_Rotation(A);
+
+			Update_Mesh(c, R, 1 / dt);
+		}
 		
     }
+
+	Matrix4x4 MatrixAddition(Matrix4x4 A, Matrix4x4 B)
+    {
+		for (int x = 0; x < 4; x++)
+		{
+			for (int y = 0; y < 4; y++)
+			{
+				A[x, y] += B[x, y];
+			}
+		}
+		return A;
+	}
 }
