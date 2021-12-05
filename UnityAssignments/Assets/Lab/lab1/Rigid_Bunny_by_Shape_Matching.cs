@@ -1,8 +1,6 @@
 using System.Collections;
 using System.Collections.Generic;
 using UnityEngine;
-
-
 struct rowVector3
 {
 	public float x;
@@ -56,10 +54,12 @@ public class Rigid_Bunny_by_Shape_Matching : MonoBehaviour
 	Vector3[] V;
 	Matrix4x4 QQt = Matrix4x4.zero;
 
+	private Vector3 omega = new Vector3();
+
 
 	float linear_decay = 0.999f;                // for velocity decay
 	float angular_decay = 0.98f;
-	float restitution = 0.5f;                   // for collision
+	float restitution = 0.8f;                   // for collision
 
 	// Start is called before the first frame update
 	void Start()
@@ -195,13 +195,29 @@ public class Rigid_Bunny_by_Shape_Matching : MonoBehaviour
 	    return R;
 	}
 
+	Matrix4x4 Get_Cross_Matrix(Vector3 a)
+	{
+		//Get the cross product matrix of vector a
+		Matrix4x4 A = Matrix4x4.zero;
+		A[0, 0] = 0;
+		A[0, 1] = -a[2];
+		A[0, 2] = a[1];
+		A[1, 0] = a[2];
+		A[1, 1] = 0;
+		A[1, 2] = -a[0];
+		A[2, 0] = -a[1];
+		A[2, 1] = a[0];
+		A[2, 2] = 0;
+		A[3, 3] = 1;
+		return A;
+	}
 	// Update the mesh vertices according to translation c and rotation R.
 	// It also updates the velocity.
 	void Update_Mesh(Vector3 c, Matrix4x4 R, float inv_dt)
    	{
    		for(int i=0; i<Q.Length; i++)
 		{
-			Vector3 x=(Vector3)(R*Q[i])+c;// 顶点的位置
+			Vector3 x=(Vector3)(R * Q[i])+c;// 顶点的位置
 
 			V[i]+=(x-X[i])*inv_dt;
 			X[i]=x;
@@ -222,16 +238,22 @@ public class Rigid_Bunny_by_Shape_Matching : MonoBehaviour
 			float sdf = PlaneSignedDistanceFunction(X[i], P, N);
 			if (sdf < 0)
             {
-				Vector3 v_Ni = Vector3.Dot(V[i], N) * N;
-				Vector3 v_Ti = V[i] - v_Ni;
-				Vector3 v_new_i = v_Ni + v_Ti;
-				float mu_N = restitution;
-				float mu_T = 0.1f;
-				float a = Mathf.Max(1 - (mu_T * (1 + mu_N) * v_Ni.magnitude / v_Ti.magnitude), 0);
-				v_Ni = -mu_N * v_Ni;
-				v_Ti = a * v_Ti;
-				V[i] = v_Ni + v_Ti;
-				X[i] = X[i] - sdf * N;
+				if (Vector3.Dot(V[i], N) < 0)
+                {
+					Vector3 v_Ni = Vector3.Dot(V[i], N) * N;
+					Vector3 v_Ti = V[i] - v_Ni;
+					Vector3 v_new_i = v_Ni + v_Ti;
+					float mu_N = restitution;
+					float mu_T = 0.1f;
+					float a = Mathf.Max(1 - (mu_T * (1 + mu_N) * v_Ni.magnitude / v_Ti.magnitude), 0);
+					v_Ni = -mu_N * v_Ni;
+					v_Ti = a * v_Ti;
+					v_new_i = v_Ni + v_Ti;
+
+					V[i] = v_new_i;
+
+					X[i] = X[i] - sdf * N;
+				}
 			}
 		}
 	}
@@ -254,8 +276,13 @@ public class Rigid_Bunny_by_Shape_Matching : MonoBehaviour
 		}
 		if (Input.GetKey("l"))
 		{
+			omega = new Vector3(0.5f, 1.5f, 0.0f);
 			for (int i = 0; i < X.Length; i++)
+            {
 				V[i][0] = 4.0f;
+				V[i][1] = 3.8f;
+			}
+				
 			launched = true;
 		}
 
@@ -277,6 +304,7 @@ public class Rigid_Bunny_by_Shape_Matching : MonoBehaviour
 				// simi-integration
 				V[i] += gravity * dt;
 				X[i] += V[i] * dt;
+				V[i] *= linear_decay;
 			}
 			//Step 2: Perform simple particle collision.
 			Collision(1 / dt);
@@ -294,8 +322,22 @@ public class Rigid_Bunny_by_Shape_Matching : MonoBehaviour
 			Matrix4x4 a_right = QQt.inverse;
 			for (int i = 0; i < V.Length; i++)
 			{
-				rowVector3 ri_transpose = new rowVector3(Q[i]);
-				a_left = MatrixAddition(a_left,(X[i] - c) * ri_transpose);
+				//rowVector3 ri_transpose = new rowVector3(Q[i]);
+				//a_left = MatrixAddition(a_left,(X[i] - c) * ri_transpose);
+				a_left[0, 0] += (X[i] - c).x * Q[i].x;
+				a_left[0, 1] += (X[i] - c).x * Q[i].y;
+				a_left[0, 2] += (X[i] - c).x * Q[i].z;
+							 
+				a_left[1, 0] += (X[i] - c).y * Q[i].x;
+				a_left[1, 1] += (X[i] - c).y * Q[i].y;
+				a_left[1, 2] += (X[i] - c).y * Q[i].z;
+							 
+				a_left[2, 0] += (X[i] - c).z * Q[i].x;
+				a_left[2, 1] += (X[i] - c).z * Q[i].y;
+				a_left[2, 2] += (X[i] - c).z * Q[i].z;
+
+				a_left[3, 3] = 1;
+
 			}
 			A = a_left * a_right;
 
