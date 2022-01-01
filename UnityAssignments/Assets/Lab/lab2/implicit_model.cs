@@ -5,9 +5,11 @@ using UnityEngine;
 public class implicit_model : MonoBehaviour
 {
 	float 		t 		= 0.0333f;
+	float		inv_t	= 30.03f;
 	float 		mass	= 1;
 	float		damping	= 0.99f;
-	float 		rho		= 0.995f;
+	float 		rho		= 0.8f;
+	float		epsilon = 1e-3f;
 	float 		spring_k = 8000;
 	int[] 		E;
 	float[] 	L;
@@ -134,8 +136,18 @@ public class implicit_model : MonoBehaviour
 	{
 		Mesh mesh = GetComponent<MeshFilter> ().mesh;
 		Vector3[] X = mesh.vertices;
-		
+		Vector3 c = GameObject.Find("Sphere").transform.position;
+		float r = 2.7f;
 		//Handle colllision.
+		for (int i = 0; i < X.Length; i++)
+		{
+			if((X[i]-c).magnitude<r)
+				if (i != 0 && i != 20)
+				{
+					V[i] = V[i]+inv_t*(c+r*(X[i]-c).normalized - X[i]);
+					X[i] = c + r * (X[i] - c).normalized;
+				}
+		}
 
 		mesh.vertices = X;
 	}
@@ -143,8 +155,18 @@ public class implicit_model : MonoBehaviour
 	void Get_Gradient(Vector3[] X, Vector3[] X_hat, float t, Vector3[] G)
 	{
 		//Momentum and Gravity.
-		
+		for (int i = 0; i < G.Length; i++)
+        {
+			G[i] = new Vector3(0.0f, 9.8f, 0.0f);
+        }
 		//Spring Force.
+		for (int e = 0; e < E.Length; e+=2)
+        {
+			int i = E[e];
+			int j = E[e + 1];
+			G[i] += spring_k * (1 - L[e/2] / (X[i] - X[j]).magnitude) * (X[i] - X[j]);
+			G[j] -= spring_k * (1 - L[e/2] / (X[i] - X[j]).magnitude) * (X[i] - X[j]);
+		}
 		
 	}
 
@@ -158,17 +180,82 @@ public class implicit_model : MonoBehaviour
 		Vector3[] G 		= new Vector3[X.Length];
 
 		//Initial Setup.
+		for(int i = 0; i < X.Length; i++)
+        {
+			if(i!=0&&i!=20)
+            {
+				V[i] *= damping;
+				X_hat[i] = X[i] + t * V[i];
+				X[i] = X_hat[i];
+			}
+			
+		} 
 
-		for(int k=0; k<32; k++)
+		Vector3[] dx = new Vector3[X.Length];
+		Vector3[] lastdx = new Vector3[X.Length];
+		float omega = 1;
+		for (int k = 0; k < 32; k++)
 		{
 			Get_Gradient(X, X_hat, t, G);
-			
+
 			//Update X by gradient.
+			//for (int i = 0; i < X.Length; i++)
+			//{
+			//    if (i != 0 && i != 20)
+			//    {
+			//        X[i] = X[i] - G[i] / (inv_t * inv_t * mass + 4 * spring_k);
+			//    }
+			//}
+
+			// Chebyshev Acceleration
+			if (k == 0)
+				omega = 1;
+			else if (k == 1)
+				omega = 2 / (2 - rho * rho);
+			else
+				omega = 4 / (4 - rho * rho * omega);
+
+			for (int i = 0; i < X.Length; i++)
+			{
+				if (i != 0 && i != 20)
+				{
+					Vector3 olddx = dx[i];
+					dx[i] = -G[i] / (inv_t * inv_t * mass + 4 * spring_k);
+					dx[i] = omega * dx[i] + (1 - omega) * lastdx[i];
+					lastdx[i] = olddx;
+					last_X[i] = X[i];
+					X[i] = X[i] + dx[i];
+
+				}
+
+			}
+			bool canBreak = true;
+			for (int i = 0; i < X.Length; i++)
+			{
+				if (dx[i].magnitude > epsilon)
+                {
+					canBreak = false;
+					break;
+				}
+			}
+			if (canBreak)
+			{
+				Debug.Log("µü´ú´ÎÊý"+k);
+				break;
+			}
 			
+
 		}
 
-		//Finishing.
-		
+			//Finishing.
+		for (int i = 0; i < X.Length; i++)
+		{
+			if (i != 0 && i != 20)
+			{
+				V[i] = V[i] + inv_t * (X[i] - X_hat[i]);
+			}
+		}
+
 		mesh.vertices = X;
 
 		Collision_Handling ();

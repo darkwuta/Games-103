@@ -59,7 +59,7 @@ public class Rigid_Bunny_by_Shape_Matching : MonoBehaviour
 
 	float linear_decay = 0.999f;                // for velocity decay
 	float angular_decay = 0.98f;
-	float restitution = 0.8f;                   // for collision
+	float restitution = 1f;                   // for collision
 
 	// Start is called before the first frame update
 	void Start()

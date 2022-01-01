@@ -4,6 +4,7 @@ using System.Collections;
 public class PBD_model: MonoBehaviour {
 
 	float 		t= 0.0333f;
+	float		inv_t = 30.03f;
 	float		damping= 0.99f;
 	int[] 		E;
 	float[] 	L;
@@ -130,19 +131,48 @@ public class PBD_model: MonoBehaviour {
 	{
 		Mesh mesh = GetComponent<MeshFilter> ().mesh;
 		Vector3[] vertices = mesh.vertices;
-
+		Vector3[] sum_x = new Vector3[vertices.Length];
+		int[] sum_n = new int[vertices.Length];
 		//Apply PBD here.
 		//...
+		for (int e = 0; e < E.Length; e+=2)
+        {
+			int i = E[e];
+			int j = E[e + 1];
+			sum_x[i] += 0.5f * (vertices[i] + vertices[j] + L[e/2] * (vertices[i] - vertices[j]).normalized);
+			sum_n[i]++;
+
+			sum_x[j] += 0.5f * (vertices[i] + vertices[j] - L[e/2] * (vertices[i] - vertices[j]).normalized);
+			sum_n[j]++;
+		}
+		for (int i = 0; i < vertices.Length; i++)
+        {
+			if (i == 0 || i == 20) continue;
+			V[i] += inv_t * ((0.2f * vertices[i] + sum_x[i]) / (0.2f + sum_n[i]) - vertices[i]);
+			vertices[i] = (0.2f * vertices[i] + sum_x[i]) / (0.2f + sum_n[i]);
+		}
+		
+
 		mesh.vertices = vertices;
 	}
 
 	void Collision_Handling()
 	{
-		Mesh mesh = GetComponent<MeshFilter> ().mesh;
+		Mesh mesh = GetComponent<MeshFilter>().mesh;
 		Vector3[] X = mesh.vertices;
-		
-		//For every vertex, detect collision and apply impulse if needed.
-		//...
+		Vector3 c = GameObject.Find("Sphere").transform.position;
+		float r = 2.7f;
+		//Handle colllision.
+		for (int i = 0; i < X.Length; i++)
+		{
+			if ((X[i] - c).magnitude < r)
+				if (i != 0 && i != 20)
+				{
+					V[i] = V[i] + inv_t * (c + r * (X[i] - c).normalized - X[i]);
+					X[i] = c + r * (X[i] - c).normalized;
+				}
+		}
+
 		mesh.vertices = X;
 	}
 
@@ -156,7 +186,9 @@ public class PBD_model: MonoBehaviour {
 		{
 			if(i==0 || i==20)	continue;
 			//Initial Setup
-			//...
+			V[i] *= damping;
+			V[i] += new Vector3(0, -9.8f, 0) * t;
+			X[i] += V[i] * t;
 		}
 		mesh.vertices = X;
 
