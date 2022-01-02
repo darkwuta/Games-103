@@ -1,5 +1,6 @@
 using System.Collections;
 using System.Collections.Generic;
+using System.Threading.Tasks;
 using UnityEngine;
 using System;
 using System.IO;
@@ -27,6 +28,7 @@ public class FVM : MonoBehaviour
     int number;             //The number of vertices
 
     Matrix4x4[] inv_Dm;
+    float[] V_ref;
 
     //For Laplacian smoothing.
     Vector3[] V_sum;
@@ -136,8 +138,13 @@ public class FVM : MonoBehaviour
 
         //TODO: Need to allocate and assign inv_Dm
         inv_Dm = new Matrix4x4[tet_number];
+        V_ref = new float[tet_number];
         for (int tet = 0; tet < tet_number; tet++)
+        {
             inv_Dm[tet] = Build_Edge_Matrix(tet);
+            inv_Dm[tet] = inv_Dm[tet].inverse;
+            V_ref[tet] = 1 / (6 * inv_Dm[tet].determinant);
+        }
     }
 
     Matrix4x4 Build_Edge_Matrix(int tet)
@@ -154,9 +161,9 @@ public class FVM : MonoBehaviour
         Vector3 X20 = X[index_2] - X[index_0];
         Vector3 X30 = X[index_3] - X[index_0];
 
-        ret[0, 0] = X10[0];
-        ret[1, 0] = X10[1];
-        ret[2, 0] = X10[2];
+        ret[0] = X10[0];
+        ret[1] = X10[1];
+        ret[2] = X10[2];
 
         ret[0, 1] = X20[0];
         ret[1, 1] = X20[1];
@@ -167,8 +174,6 @@ public class FVM : MonoBehaviour
         ret[2, 2] = X30[2];
 
         ret[3, 3] = 1;
-        ret = ret.inverse;
-        
         return ret;
     }
 
@@ -185,104 +190,105 @@ public class FVM : MonoBehaviour
         for (int i = 0; i < number; i++)
         {
             //TODO: Add gravity to Force.
-            //Force[i] = new Vector3(0, -9.8f, 0);
+            Force[i] = new Vector3(0, -9.8f, 0);
         }
-
-        for (int tet = 0; tet < 5; tet++)
+        //int tet = 0;
+        //Parallel.For(0, tet_number, (tet) =>
+        for (int tet = 0; tet < tet_number; tet++)
         {
             //TODO: Deformation Gradient
             Matrix4x4 F = Matrix4x4.zero;
-            Matrix4x4 d = Matrix4x4.zero;
 
             int index_0 = Tet[tet * 4 + 0];
             int index_1 = Tet[tet * 4 + 1];
             int index_2 = Tet[tet * 4 + 2];
             int index_3 = Tet[tet * 4 + 3];
 
-            Vector3 X10 = X[index_1] - X[index_0];
-            Vector3 X20 = X[index_2] - X[index_0];
-            Vector3 X30 = X[index_3] - X[index_0];
 
-            d[0, 0] = X10[0];
-            d[1, 0] = X10[1];
-            d[2, 0] = X10[2];
-            
-            d[0, 1] = X20[0];
-            d[1, 1] = X20[1];
-            d[2, 1] = X20[2];
-           
-            d[0, 2] = X30[0];
-            d[1, 2] = X30[1];
-            d[2, 2] = X30[2];
+            F = Build_Edge_Matrix(tet) * inv_Dm[tet];
+            F[3, 3] = 1;
 
-            d[3, 3] = 1;
-            F = d * inv_Dm[tet];
-            Debug.Log("F:" + tet);
-            Debug.Log(F);
+            //Debug.Log("inv_Dm[tet]:" + tet);
+            //Debug.Log(inv_Dm[tet]);
+
+            //Debug.Log("F:" + tet);
+            //Debug.Log(F);
 
             //TODO: Green Strain
+
             Matrix4x4 FtF = F.transpose * F;
-            Debug.Log("FtF:"+tet);
-            Debug.Log(FtF);
+            FtF[3, 3] = 1;
+            //Debug.Log("FtF:" + tet);
+            //Debug.Log(FtF);
 
             Matrix4x4 G = MatrixMultiple(MatrixSubtraction(FtF, Matrix4x4.identity), 0.5f);
-            Debug.Log("G:"+tet);
-            Debug.Log(G);
+            G[3, 3] = 1;
+            //Debug.Log("G:" + tet);
+            //Debug.Log(G);
             //TODO: Second PK Stress
             float trace;
             trace = G[0, 0] + G[1, 1] + G[2, 2];
-            Debug.Log("trace:" + tet);
-            Debug.Log(trace);
-            Matrix4x4 dWdG = MatrixAddition(MatrixMultiple(G, 2*stiffness_1),MatrixMultiple(Matrix4x4.identity,stiffness_0*trace));
-            Debug.Log("dWdG:" + dWdG);
-            Debug.Log(dWdG);
+            //Debug.Log("trace:" + tet);
+            //Debug.Log(trace);
+            Matrix4x4 dWdG = MatrixAddition(MatrixMultiple(G, 2 * stiffness_1), MatrixMultiple(Matrix4x4.identity, stiffness_0 * trace));
+            dWdG[3, 3] = 1;
+
+            //Debug.Log("MatrixMultiple(Matrix4x4.identity, stiffness_0 * trace):" + tet);
+            //Debug.Log(MatrixMultiple(Matrix4x4.identity, stiffness_0 * trace));
+            //Debug.Log("dWdG:" + tet);
+            //Debug.Log(dWdG);
             Matrix4x4 P = F * dWdG;
-            Debug.Log("P:" + P);
-            Debug.Log(P);
+            P[3, 3] = 1;
+            //Debug.Log("P:" + P);
+            //Debug.Log(P);
 
             //TODO: Elastic Force
-            float p = -1 / (6 * inv_Dm[tet].determinant);
 
-            Matrix4x4 F123 = MatrixMultiple(P * inv_Dm[tet].transpose, p);
-            Debug.Log("F123:" + F123);
-            Debug.Log(F123);
+            Matrix4x4 F123 = MatrixMultiple(P, -V_ref[tet]) * inv_Dm[tet].transpose;
+            F123[3, 3] = 1;
+            //Debug.Log("F123:" + F123);
+            //Debug.Log(F123);
 
-            Force[index_1] = new Vector3(F123[0, 0], F123[1, 0], F123[2, 0]);
-            Force[index_2] = new Vector3(F123[0, 1], F123[1, 1], F123[2, 1]);
-            Force[index_3] = new Vector3(F123[0, 2], F123[1, 2], F123[2, 2]);
+            Vector3 f1 = (Vector3)F123.GetColumn(0);
+            Vector3 f2 = (Vector3)F123.GetColumn(1);
+            Vector3 f3 = (Vector3)F123.GetColumn(2);
 
-            Force[index_0] = -Force[index_1] - Force[index_2] - Force[index_3];
+            Vector3 f0 = -f1 - f2 - f3;
+            // 直接用Force更新不行
+            Force[index_0] += f0;
+            Force[index_1] += f1;
+            Force[index_2] += f2;
+            Force[index_3] += f3;
+
+            //Debug.Log("Force[index_1]:" + tet);
+            //Debug.Log(Force[index_1]);
+            //Debug.Log("Force[index_2]:" + tet);
+            //Debug.Log(Force[index_2]);
+            //Debug.Log("Force[index_3]:" + tet);
+            //Debug.Log(Force[index_3]);
 
             // test
-            V[index_0] += (Force[index_0] + gravity) / mass * dt;
-            X[index_0] += V[index_0] * dt;
-            V[index_0] *= damp;
+            //V[index_0] += (Force[index_0]) / mass * dt;
 
-            V[index_1] += (Force[index_1]+ gravity) / mass * dt;
-            X[index_1] += V[index_1] * dt;
-            V[index_1] *= damp;
+            //V[index_1] += (Force[index_1]) / mass * dt;
 
-            V[index_2] += (Force[index_2]+ gravity) / mass * dt;
-            X[index_2] += V[index_2] * dt;
-            V[index_2] *= damp;
+            //V[index_2] += (Force[index_2]) / mass * dt;
 
-            V[index_3] += (Force[index_3] + gravity) / mass * dt;
-            X[index_3] += V[index_3] * dt;
-            V[index_3] *= damp;
-            Collision_Impulse(new Vector3(0, -3, 0), new Vector3(0, 1, 0));
-            Debug.LogWarning("next");
+            //V[index_3] += (Force[index_3]) / mass * dt;
+            //Debug.LogWarning("next");
         }
 
-        //for (int i = 0; i < number; i++)
-        //{
-        //    //TODO: Update X and V here.
-        //    V[i] += Force[i]/mass * dt;
-        //    X[i] += V[i] * dt;
-        //    V[i] *= damp;
+        for (int i = 0; i < number; i++)
+        {
+            //TODO: Update X and V here.
+            //if((Force[i]-gravity).magnitude>0.01f)
+            V[i] += Force[i] * dt;
+            X[i] += V[i] * dt;
+            V[i] *= damp;
 
-        //    //TODO: (Particle) collision with floor.
-        //    Collision_Impulse(new Vector3(0, -3, 0), new Vector3(0, 1, 0));
-        //}
+            //TODO: (Particle) collision with floor.
+            Collision_Impulse(new Vector3(0, -3, 0), new Vector3(0, 1, 0));
+        }
     }
 
     void Collision_Impulse(Vector3 P, Vector3 N)
