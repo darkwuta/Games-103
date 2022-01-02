@@ -9,7 +9,7 @@ using System.IO;
 
 public class FVM : MonoBehaviour
 {
-    float dt = 0.003f;
+    float dt = 0.001f;
     float mass = 1;
     float stiffness_0 = 20000.0f;
     float stiffness_1 = 5000.0f;
@@ -24,11 +24,14 @@ public class FVM : MonoBehaviour
 
     Vector3[] Force;
     Vector3[] V;
+    Vector3[] SmoothV;
     Vector3[] X;
     int number;             //The number of vertices
 
     Matrix4x4[] inv_Dm;
     float[] V_ref;
+    int[][] neighbour;
+
 
     //For Laplacian smoothing.
     Vector3[] V_sum;
@@ -132,6 +135,7 @@ public class FVM : MonoBehaviour
 
 
         V = new Vector3[number];
+        SmoothV = new Vector3[number];
         Force = new Vector3[number];
         V_sum = new Vector3[number];
         V_num = new int[number];
@@ -145,6 +149,23 @@ public class FVM : MonoBehaviour
             inv_Dm[tet] = inv_Dm[tet].inverse;
             V_ref[tet] = 1 / (6 * inv_Dm[tet].determinant);
         }
+        neighbour = new int[number][];
+        // Build Neighbour
+        //for (int i =0;i<number;i++)
+        //{
+        //    neighbour[i] = new int[50];
+        //    for (int tet = 0;tet<tet_number;tet++)
+        //    {
+        //        int index_0 = Tet[tet * 4 + 0];
+        //        int index_1 = Tet[tet * 4 + 1];
+        //        int index_2 = Tet[tet * 4 + 2];
+        //        int index_3 = Tet[tet * 4 + 3];
+        //        for (int n = 0; n < neighbour[i].Length; n++) 
+        //        {
+
+        //        }
+        //    }
+        //}
     }
 
     Matrix4x4 Build_Edge_Matrix(int tet)
@@ -187,26 +208,18 @@ public class FVM : MonoBehaviour
                 V[i].y += 0.2f;
         }
 
-        for (int i = 0; i < number; i++)
+        Parallel.For(0, number, (i) =>
         {
             //TODO: Add gravity to Force.
             Force[i] = new Vector3(0, -9.8f, 0);
-        }
+        });
         //int tet = 0;
-        //Parallel.For(0, tet_number, (tet) =>
-        for (int tet = 0; tet < tet_number; tet++)
+        Parallel.For(0, tet_number, (tet) =>
+        //for (int tet = 0; tet < tet_number; tet++)
         {
             //TODO: Deformation Gradient
             Matrix4x4 F = Matrix4x4.zero;
-
-            int index_0 = Tet[tet * 4 + 0];
-            int index_1 = Tet[tet * 4 + 1];
-            int index_2 = Tet[tet * 4 + 2];
-            int index_3 = Tet[tet * 4 + 3];
-
-
             F = Build_Edge_Matrix(tet) * inv_Dm[tet];
-            F[3, 3] = 1;
 
             //Debug.Log("inv_Dm[tet]:" + tet);
             //Debug.Log(inv_Dm[tet]);
@@ -217,12 +230,10 @@ public class FVM : MonoBehaviour
             //TODO: Green Strain
 
             Matrix4x4 FtF = F.transpose * F;
-            FtF[3, 3] = 1;
             //Debug.Log("FtF:" + tet);
             //Debug.Log(FtF);
 
             Matrix4x4 G = MatrixMultiple(MatrixSubtraction(FtF, Matrix4x4.identity), 0.5f);
-            G[3, 3] = 1;
             //Debug.Log("G:" + tet);
             //Debug.Log(G);
             //TODO: Second PK Stress
@@ -231,21 +242,18 @@ public class FVM : MonoBehaviour
             //Debug.Log("trace:" + tet);
             //Debug.Log(trace);
             Matrix4x4 dWdG = MatrixAddition(MatrixMultiple(G, 2 * stiffness_1), MatrixMultiple(Matrix4x4.identity, stiffness_0 * trace));
-            dWdG[3, 3] = 1;
 
             //Debug.Log("MatrixMultiple(Matrix4x4.identity, stiffness_0 * trace):" + tet);
             //Debug.Log(MatrixMultiple(Matrix4x4.identity, stiffness_0 * trace));
             //Debug.Log("dWdG:" + tet);
             //Debug.Log(dWdG);
             Matrix4x4 P = F * dWdG;
-            P[3, 3] = 1;
             //Debug.Log("P:" + P);
             //Debug.Log(P);
 
             //TODO: Elastic Force
 
             Matrix4x4 F123 = MatrixMultiple(P, -V_ref[tet]) * inv_Dm[tet].transpose;
-            F123[3, 3] = 1;
             //Debug.Log("F123:" + F123);
             //Debug.Log(F123);
 
@@ -254,11 +262,11 @@ public class FVM : MonoBehaviour
             Vector3 f3 = (Vector3)F123.GetColumn(2);
 
             Vector3 f0 = -f1 - f2 - f3;
-            // 直接用Force更新不行
-            Force[index_0] += f0;
-            Force[index_1] += f1;
-            Force[index_2] += f2;
-            Force[index_3] += f3;
+
+            Force[Tet[tet * 4 + 0]] += f0;
+            Force[Tet[tet * 4 + 1]] += f1;
+            Force[Tet[tet * 4 + 2]] += f2;
+            Force[Tet[tet * 4 + 3]] += f3;
 
             //Debug.Log("Force[index_1]:" + tet);
             //Debug.Log(Force[index_1]);
@@ -276,9 +284,23 @@ public class FVM : MonoBehaviour
 
             //V[index_3] += (Force[index_3]) / mass * dt;
             //Debug.LogWarning("next");
+        });
+
+        // Laplacian smoothing 
+        for (int i = 0; i < number; i++) 
+        {
+            for (int tet = 0; tet < tet_number; tet++) 
+            {
+                int index_0 = Tet[tet * 4 + 0];
+                int index_1 = Tet[tet * 4 + 1];
+                int index_2 = Tet[tet * 4 + 2];
+                int index_3 = Tet[tet * 4 + 3];
+
+            }
         }
 
-        for (int i = 0; i < number; i++)
+        Parallel.For(0, number, (i) =>
+        //for (int i = 0; i < number; i++)
         {
             //TODO: Update X and V here.
             //if((Force[i]-gravity).magnitude>0.01f)
@@ -288,8 +310,9 @@ public class FVM : MonoBehaviour
 
             //TODO: (Particle) collision with floor.
             Collision_Impulse(new Vector3(0, -3, 0), new Vector3(0, 1, 0));
-        }
+        });
     }
+   
 
     void Collision_Impulse(Vector3 P, Vector3 N)
     {
@@ -354,38 +377,53 @@ public class FVM : MonoBehaviour
 
     Matrix4x4 MatrixSubtraction(Matrix4x4 m1, Matrix4x4 m2)
     {
-        for (int i = 0; i < 4; i++)
-        {
-            for (int j = 0; j < 4; j++)
-            {
-                m1[i, j] -= m2[i, j];
-            }
-        }
+        m1[0, 0] -= m2[0, 0];
+        m1[0, 1] -= m2[0, 1];
+        m1[0, 2] -= m2[0, 2];
+
+        m1[1, 0] -= m2[1, 0];
+        m1[1, 1] -= m2[1, 1];
+        m1[1, 2] -= m2[1, 2];
+
+        m1[2, 0] -= m2[2, 0];
+        m1[2, 1] -= m2[2, 1];
+        m1[2, 2] -= m2[2, 2];
+
         m1[3, 3] = 1;
         return m1;
     }
 
     Matrix4x4 MatrixAddition(Matrix4x4 m1, Matrix4x4 m2)
     {
-        for (int i = 0; i < 4; i++)
-        {
-            for (int j = 0; j < 4; j++)
-            {
-                m1[i, j] += m2[i, j];
-            }
-        }
+        m1[0, 0] += m2[0, 0];
+        m1[0, 1] += m2[0, 1];
+        m1[0, 2] += m2[0, 2];
+               
+        m1[1, 0] += m2[1, 0];
+        m1[1, 1] += m2[1, 1];
+        m1[1, 2] += m2[1, 2];
+        
+        m1[2, 0] += m2[2, 0];
+        m1[2, 1] += m2[2, 1];
+        m1[2, 2] += m2[2, 2];
+
         m1[3, 3] = 1;
         return m1;
     }
     Matrix4x4 MatrixMultiple(Matrix4x4 m, float k)
     {
-        for (int i = 0; i < 4; i++)
-        {
-            for (int j = 0; j < 4; j++)
-            {
-                m[i, j] *= k;
-            }
-        }
+        m[0, 0] *= k;
+        m[0, 1] *= k;
+        m[0, 2] *= k;
+                  
+        m[1, 0] *= k;
+        m[1, 1] *= k;
+        m[1, 2] *= k;
+                
+        m[2, 0] *= k;
+        m[2, 1] *= k;
+        m[2, 2] *= k;
+
         m[3, 3] = 1;
         return m;
     }
